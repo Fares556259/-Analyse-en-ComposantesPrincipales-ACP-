@@ -1,0 +1,4 @@
+miniconda/
+report_files/
+*.sh
+*.log

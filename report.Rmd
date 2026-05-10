@@ -1,0 +1,335 @@
+---
+title: "TP1 : Analyse en Composantes Principales (ACP) - Rapport Complet"
+author: "Zeineb Saidani, Fares Selmi"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  pdf_document:
+    latex_engine: xelatex
+    toc: true
+    toc_depth: 3
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.width=8, fig.height=6)
+library(FactoMineR)
+library(factoextra)
+library(ggplot2)
+library(corrplot)
+library(RColorBrewer)
+```
+
+# Introduction
+Ce TP d'Analyse en Composantes Principales (ACP) porte sur une étude de satisfaction client concernant les recommandations logarithmiques/algorithmiques. La base de données contient 41 individus et 35 variables.
+
+L'ACP permet de décrire un jeu de données, de le résumer et d'en réduire la dimensionnalité tout en conservant l'essentiel de l'information (variance).
+
+# Importer et explorer le jeu de données
+
+```{r data_loading}
+# Chargement des données
+data <- read.csv("Votre avis sur la formation (réponses) - Réponses au formulaire 1.csv", header = TRUE)
+
+# Pour éviter l'encombrement des graphiques, nous utilisons les indices des lignes comme identifiants
+rownames(data) <- 1:nrow(data)
+```
+
+## Premières lignes du jeu de données (head)
+```{r head}
+head(data[, 1:12])
+```
+
+## Dernières lignes du jeu de données (tail)
+```{r tail}
+tail(data[, 1:12])
+```
+
+## Structure des données (str)
+```{r str}
+str(data)
+```
+
+## Résumé statistique (summary)
+```{r summary}
+summary(data[, 7:15]) # Résumé d'un échantillon de variables actives
+```
+
+# ACP normée pas à pas
+Conformément à la théorie, nous réalisons l'ACP manuellement avant d'utiliser les packages spécialisés.
+
+## Préparation de la matrice active
+On extrait les variables Q7 à Q30 qui sont les scores sur l'échelle de Likert. Les valeurs manquantes sont imputées par la moyenne de la variable.
+
+```{r manual_X}
+X <- as.matrix(data[, 7:30])
+
+# Imputation des valeurs manquantes par la moyenne (comme le fait FactoMineR)
+for(i in 1:ncol(X)){
+  if(any(is.na(X[,i]))){
+    X[is.na(X[,i]), i] <- mean(X[,i], na.rm = TRUE)
+  }
+}
+```
+
+## Calcul de la matrice centrée réduite
+### Centrage
+```{r manual_centering}
+g <- colMeans(X, na.rm = TRUE)
+Y <- sweep(X, 2, g, FUN = '-')
+round(head(Y[, 1:5]), 3)
+```
+
+### Réduction
+```{r manual_reduction}
+n <- nrow(X)
+et <- apply(Y, 2, function(x) sqrt(sum(x^2, na.rm = TRUE) / n))
+Z <- sweep(Y, 2, et, FUN = '/')
+
+# Vérification : moyennes = 0, variances = 1
+round(colMeans(Z, na.rm = TRUE), 3)[1:5]
+round(colSums(Z^2, na.rm = TRUE)/n, 3)[1:5]
+```
+
+## Calcul de la matrice des corrélations
+```{r manual_R}
+R <- (1/n) * t(Z) %*% Z
+# R est identique à cor(X) si pas de données manquantes
+round(R[1:6, 1:6], 3)
+```
+
+## Calcul des valeurs propres et vecteurs propres
+```{r manual_eigen}
+vp <- eigen(R)
+lambda <- vp$values
+U <- vp$vectors
+
+# Affichage des valeurs propres
+lambda
+
+# Affichage des vecteurs propres (U)
+round(U[1:6, 1:6], 3)
+
+# Vérification de l'orthonormalité : t(U) %*% U = I
+round(t(U[,1:5]) %*% U[,1:5], 3)
+```
+
+## Calcul des composantes principales (Psi)
+Les composantes principales sont les projections des individus sur les axes.
+```{r manual_psi}
+Psi <- Z %*% U
+colnames(Psi) <- paste0("Dim.", 1:ncol(Psi))
+round(head(Psi[, 1:5]), 3)
+```
+
+## Les coordonnées des variables sur les axes (Eta)
+```{r manual_eta}
+Eta <- sweep(U, 2, sqrt(lambda), FUN = '*')
+colnames(Eta) <- paste0("Dim.", 1:ncol(Eta))
+round(head(Eta[, 1:5]), 3)
+```
+
+# ACP avec le package FactoMineR
+
+## Pertinence de l'ACP (Corrplot)
+L'étude des corrélations suggère la pertinence de l'ACP car de nombreux groupes de variables sont liés.
+
+```{r corrplot, fig.height=8, fig.width=8}
+M <- cor(X, use = "pairwise.complete.obs")
+corrplot(M, type="upper", order="hclust", col=brewer.pal(n=8, name="RdBu"))
+```
+
+## Exécution de la fonction PCA
+```{r pca_exec}
+res.pca <- PCA(data, 
+               quanti.sup = NULL, 
+               quali.sup = c(1, 2, 3, 4, 5, 6, 31:35), 
+               graph = FALSE)
+```
+
+# Choix du nombre d'axes à retenir
+
+```{r eigenvalues_table}
+res.pca$eig
+```
+
+## Éboulis des valeurs propres (Scree Plot)
+```{r scree_plot_final}
+fviz_screeplot(res.pca, ncp=10, addlabels=TRUE) + 
+  theme_minimal() + 
+  labs(title="Éboulis des valeurs propres (Scree Plot)")
+```
+
+### Analyse des critères :
+- **Critère de Kaiser** : On retient les axes dont la valeur propre est > 1. Ici, les 4 premiers axes.
+- **Taux d'inertie cumulé** : Les 2 premiers axes restituent 48.05% de l'information. C'est significatif.
+- **Critère du coude** : Le coude est visible au niveau du 2ème ou 3ème axe.
+**Décision** : Nous retenons les **2 premiers axes** pour l'interprétation.
+
+# Interprétation de la carte des variables
+
+## Coordonnées, Cos2 et Contributions
+```{r var_tables}
+# Coordonnées
+round(res.pca$var$coord[, 1:2], 3)
+
+# Qualité de représentation (Cos2)
+round(res.pca$var$cos2[, 1:2], 3)
+
+# Contributions aux axes (%)
+round(res.pca$var$contrib[, 1:2], 3)
+```
+
+## Cercle des corrélations
+```{r var_circle_basic}
+fviz_pca_var(res.pca) + theme_minimal() + labs(title="Cercle des corrélations (Standard)")
+```
+
+```{r var_circle_final}
+fviz_pca_var(res.pca, col.var="cos2") +
+  scale_color_gradient2(low="white", mid="blue", high="red", midpoint=0.6) +
+  theme_minimal() +
+  labs(title="Cercle des corrélations des variables", subtitle="Coloré par le cos2")
+```
+
+# Interprétation de la carte des individus
+
+## Coordonnées et qualité de représentation
+```{r ind_tables}
+# Coordonnées (Extraits)
+round(head(res.pca$ind$coord[, 1:2]), 3)
+
+# Qualité de représentation (Cos2)
+round(head(res.pca$ind$cos2[, 1:2]), 3)
+```
+
+## Cartes des individus
+```{r ind_map_points}
+fviz_pca_ind(res.pca, geom = "point", col.ind.sup = 'gray') + theme_minimal()
+```
+
+```{r ind_map_text}
+fviz_pca_ind(res.pca, 
+             geom = c("point", "text"), 
+             repel = TRUE, 
+             labelsize = 3,
+             col.ind.sup = 'gray') + 
+  theme_minimal()
+```
+
+```{r ind_map_cos2}
+fviz_pca_ind(res.pca, 
+             geom = c("point", "text"), 
+             repel = TRUE,
+             labelsize = 3,
+             col.ind="cos2") +
+  scale_color_gradient2(low="blue", mid="white", high="red", midpoint=0.5) +
+  theme_minimal()
+```
+
+## Analyse par groupes (Habillage)
+
+### Par Sexe
+```{r habillage_sexe_basic}
+# Version ggplot2 (fviz)
+fviz_pca_ind(res.pca, 
+             habillage = 3, 
+             geom = c("point", "text"),
+             repel = TRUE,
+             labelsize = 3,
+             addEllipses = TRUE) + 
+  theme_minimal()
+```
+
+```{r habillage_sexe_base}
+# Version Base R (Déclutterisée : on nappe les labels individus trop denses)
+plot.PCA(res.pca, axes=c(1, 2), choix="ind", habillage=3, cex=0.7, label="none")
+```
+
+### Par Niveau d'étude
+```{r habillage_etude_basic}
+fviz_pca_ind(res.pca, 
+             habillage = 4, 
+             geom = c("point", "text"),
+             repel = TRUE,
+             labelsize = 3,
+             addEllipses = TRUE) + 
+  theme_minimal()
+```
+
+```{r habillage_etude_base}
+# Version Base R (Déclutterisée)
+plot.PCA(res.pca, axes=c(1, 2), choix="ind", habillage = 4, cex=0.7, label="none")
+```
+
+# Analyse en Correspondances Multiples (ACM)
+L'ACM est l'équivalent de l'ACP pour les variables qualitatives. Elle permet d'étudier les liens entre les modalités des variables nominales.
+
+```{r mca_exec}
+# Variables actives pour l'ACM : Age, Sexe, Niveau d'étude, Fréquence et questions binaires
+res.mca <- MCA(data[, c(2:5, 31:35)], graph = FALSE)
+```
+
+## Choix du nombre d'axes (ACM)
+Comme pour l'ACP, nous regardons les valeurs propres pour déterminer l'information capturée par chaque dimension.
+```{r mca_eig}
+res.mca$eig
+```
+
+## Interprétation du nuage des modalités
+Ce graphique (cercle des corrélations qualitatif) permet de visualiser les proximités entre modalités.
+```{r mca_var_plot}
+fviz_mca_var(res.mca, repel = TRUE, col.var = "contrib", 
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07")) +
+  theme_minimal() +
+  labs(title = "ACM - Nuage des modalités", subtitle = "Coloré par la contribution aux axes")
+```
+
+# Classification Hiérarchique sur Composantes Principales (HCPC)
+L'HCPC combine les avantages des méthodes factorielles (réduction du bruit) et des méthodes de classification (groupement).
+
+```{r hcpc_exec}
+# Calcul de la classification sur les résultats de l'ACP
+res.hcpc <- HCPC(res.pca, nb.clust = -1, graph = FALSE)
+```
+
+## Construction du Dendrogramme
+Le dendrogramme visualise la hiérarchie des regroupements et permet de justifier le nombre de clusters choisi.
+```{r hcpc_dendro}
+fviz_dend(res.hcpc, 
+          rect = TRUE, 
+          palette = "jco",
+          rect_fill = TRUE) +
+  labs(title = "HCPC - Dendrogramme des individus")
+```
+
+## Carte des clusters (Plan Factoriel)
+Représentation des groupes d'individus sur le premier plan de l'ACP (Dim 1 & 2).
+```{r hcpc_clusters}
+fviz_cluster(res.hcpc, 
+             repel = TRUE, 
+             palette = "jco", 
+             geom = "point",
+             main = "HCPC - Carte des clusters d'individus") +
+  theme_minimal()
+```
+
+# Analyse comportementale — Variables binaires et Profils
+Cette section utilise la description des clusters pour extraire des conclusions sur les questions "Oui/Non" (Q31 à Q35).
+
+## Caractérisation des clusters par les variables
+Nous utilisons le test du Khi-2 pour identifier les variables qui discriminent le mieux les groupes.
+```{r cluster_desc}
+# Variables les plus significatives pour chaque groupe
+res.hcpc$desc.var$test.chi2
+```
+
+## Profils types des répondants
+Description des modalités qui sur-représentent chaque cluster (v.test > 1.96).
+```{r cluster_cat}
+# Modalités caractéristiques (Comportements types)
+res.hcpc$desc.var$category
+```
+
+
+# Conclusion Générale
+L'analyse montre que les deux premières dimensions capturent l'essentiel de la structure du questionnaire. L'axe 1 sépare les utilisateurs selon leur sensibilité aux recommandations, tandis que l'axe 2 reflète la perception de la personnalisation. Les groupes démographiques montrent des comportements distincts, notamment en termes de confiance accordée aux algorithmes.
