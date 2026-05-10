@@ -21,7 +21,8 @@ header-includes:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.width=10, fig.height=7)
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                      fig.width = 7, fig.height = 4, fig.align = "center")
 library(FactoMineR)
 library(factoextra)
 library(ggplot2)
@@ -37,369 +38,265 @@ library(knitr)
 # Introduction
 
 ## Contexte de l'étude
-Dans l'ère numérique actuelle, les systèmes de recommandation basés sur des algorithmes complexes (souvent appelés "logarithmiques" par confusion terminologique ou par référence à leur croissance de complexité) sont omniprésents. Que ce soit sur les plateformes de streaming comme Netflix et Spotify, ou sur les réseaux sociaux comme Instagram et TikTok, ces outils façonnent nos choix et nos habitudes de consommation.
+Dans l'ère numérique actuelle, les systèmes de recommandation basés sur des algorithmes complexes sont omniprésents. Que ce soit sur les plateformes de streaming comme Netflix et Spotify, ou sur les réseaux sociaux comme Instagram et TikTok, ces outils façonnent nos choix et nos habitudes de consommation.
 
 Cette étude vise à analyser la perception et la satisfaction des utilisateurs face à ces recommandations. L'objectif est de comprendre si les utilisateurs se sentent compris par ces algorithmes, s'ils leur font confiance, et comment leurs caractéristiques démographiques influencent ces perceptions.
 
 ## Objectifs du projet
-L'objectif principal de ce projet est de mettre en œuvre une démarche complète d'analyse de données multidimensionnelles, en suivant une méthodologie rigoureuse inspirée des travaux de recherche en statistique. Les étapes clés incluent :
-1. **Statistiques Descriptives** : Pour dresser un portrait global de l'échantillon.
-2. **ACP (Analyse en Composantes Principales)** : Pour réduire la dimensionnalité des scores de satisfaction (Likert) et identifier les axes de perception majeurs.
-3. **ACM (Analyse en Correspondances Multiples)** : Pour étudier les relations entre les variables qualitatives et les comportements binaires.
-4. **HCPC (Classification Hiérarchique)** : Pour segmenter les individus en profils types.
+L'objectif principal est de mettre en œuvre une démarche complète d'analyse de données multidimensionnelles :
+
+1. **Statistiques Descriptives** : Portrait global de l'échantillon.
+2. **ACP** : Réduction de dimensionnalité et identification des axes de perception majeurs.
+3. **ACM** : Étude des relations entre les variables qualitatives et comportements binaires.
+4. **HCPC & K-means** : Segmentation des individus en profils types.
 
 ## Présentation des données
-Le jeu de données est issu d'un questionnaire administré en 2026, récoltant 41 réponses. Il comprend :
-- Des variables démographiques (Age, Sexe, Niveau d'étude).
-- Des variables d'usage (Fréquence d'utilisation, Plateformes).
-- 24 questions sur échelle de Likert (Q7 à Q30) mesurant divers aspects de la satisfaction.
-- 5 questions binaires (Oui/Non) sur des comportements spécifiques.
-
-\newpage
-
-# Importer et explorer le jeu de données
 
 ```{r data_loading}
-# Chargement des données
-data <- read.csv("Votre avis sur la formation (réponses) - Réponses au formulaire 1.csv", header = TRUE)
-
-# Pour éviter l'encombrement des graphiques, nous utilisons les indices des lignes comme identifiants
+data <- read.csv("Votre avis sur la formation (réponses) - Réponses au formulaire 1.csv",
+                 header = TRUE)
 rownames(data) <- 1:nrow(data)
 ```
 
+Le jeu de données est issu d'un questionnaire administré en 2026, récoltant **`r nrow(data)` réponses**. Il comprend des variables démographiques (Age, Sexe, Niveau d'étude), des variables d'usage (Fréquence, Plateformes), 24 questions sur échelle de Likert (Q7 à Q30) et 5 questions binaires (Q31-Q35).
+
+\newpage
+
 # Statistiques Descriptives
-Cette section présente une analyse unidimensionnelle des caractéristiques de notre échantillon. Comprendre la structure de la population est essentiel pour interpréter les résultats des analyses multidimensionnelles (ACP, ACM) qui suivront.
 
-## Répartition par Genre
-La première variable d'intérêt est le genre des répondants.
+## Répartition sociodémographique
 
-```{r desc_sexe}
-# Calcul des fréquences
+```{r desc_demo, fig.width=7, fig.height=3.5}
+# Genre
 sexe_freq <- as.data.frame(table(data$Q3))
 colnames(sexe_freq) <- c("Genre", "Effectif")
-
-# Création du graphique en camembert
-ggplot(sexe_freq, aes(x = "", y = Effectif, fill = Genre)) +
+p1 <- ggplot(sexe_freq, aes(x = "", y = Effectif, fill = Genre)) +
   geom_bar(stat = "identity", width = 1) +
-  coord_polar("y", start = 0) +
-  theme_void() +
+  coord_polar("y", start = 0) + theme_void() +
   scale_fill_brewer(palette = "Pastel1") +
   labs(title = "Répartition par Genre") +
-  geom_text(aes(label = paste0(Effectif, " (", round(Effectif/sum(Effectif)*100, 1), "%)")), 
-            position = position_stack(vjust = 0.5))
-```
+  geom_text(aes(label = paste0(round(Effectif/sum(Effectif)*100, 1), "%")),
+            position = position_stack(vjust = 0.5), size = 3)
 
-**Interprétation :**
-L'échantillon présente une répartition entre hommes et femmes. Cette information est cruciale car la littérature suggère parfois des différences de perception technologique selon le genre. Dans notre cas, nous utiliserons le genre comme variable illustrative dans l'ACP pour vérifier si des clusters se forment selon cette modalité.
-
-## Répartition par Tranche d'Âge
-L'âge est un facteur déterminant dans l'adoption et la perception des algorithmes de recommandation.
-
-```{r desc_age}
+# Âge
 age_freq <- as.data.frame(table(data$Q2))
 colnames(age_freq) <- c("Tranche_Age", "Effectif")
-
-ggplot(age_freq, aes(x = Tranche_Age, y = Effectif, fill = Tranche_Age)) +
-  geom_bar(stat = "identity") +
-  theme_minimal() +
+p2 <- ggplot(age_freq, aes(x = Tranche_Age, y = Effectif, fill = Tranche_Age)) +
+  geom_bar(stat = "identity") + theme_minimal() +
   scale_fill_brewer(palette = "Set3") +
-  labs(title = "Répartition par Tranche d'Âge", x = "Tranche d'Âge", y = "Nombre de répondants") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  labs(title = "Répartition par Âge", x = "", y = "Effectif") +
+  theme(axis.text.x = element_text(angle = 40, hjust = 1), legend.position = "none")
+
+gridExtra::grid.arrange(p1, p2, ncol = 2)
 ```
 
-**Interprétation :**
-La majorité de nos répondants se situent dans des tranches d'âge jeunes (18-22 ans ou 23-26 ans), ce qui est cohérent avec une étude portant sur les algorithmes de réseaux sociaux, ces outils étant massivement utilisés par la "Gen Z". Les profils plus âgés sont moins représentés, ce qui pourrait biaiser les résultats vers une vision plus "technophile".
+**Interprétation :** La majorité des répondants sont jeunes (18-26 ans), cohérent avec une étude sur les algorithmes de réseaux sociaux largement utilisés par la Gen Z.
 
-## Niveau d'étude
-Le niveau d'étude peut influencer la compréhension technique du fonctionnement des algorithmes.
+## Niveau d'étude et Fréquence d'utilisation
 
-```{r desc_etude}
+```{r desc_etude_freq, fig.width=7, fig.height=3.5}
+# Niveau d'étude
 etude_freq <- as.data.frame(table(data$Q4))
 colnames(etude_freq) <- c("Niveau", "Effectif")
+p3 <- ggplot(etude_freq, aes(x = reorder(Niveau, -Effectif), y = Effectif, fill = Niveau)) +
+  geom_bar(stat = "identity") + theme_minimal() +
+  labs(title = "Niveau d'étude", x = "", y = "Effectif") +
+  coord_flip() + guides(fill = "none")
 
-ggplot(etude_freq, aes(x = reorder(Niveau, -Effectif), y = Effectif, fill = Niveau)) +
-  geom_bar(stat = "identity") +
-  theme_minimal() +
-  labs(title = "Niveau d'étude des répondants", x = "Niveau", y = "Effectif") +
-  coord_flip() +
-  guides(fill = "none")
-```
-
-**Interprétation :**
-Nous observons une forte proportion d'étudiants (Ingénieurs, Licence, Mastère). Cela suggère un échantillon ayant un capital culturel et technique relativement élevé, capable de porter un regard critique sur les outils numériques utilisés au quotidien.
-
-## Fréquence d'utilisation
-La fréquence d'exposition aux algorithmes est une variable comportementale majeure.
-
-```{r desc_freq}
+# Fréquence
 freq_usage <- as.data.frame(table(data$Q5))
 colnames(freq_usage) <- c("Frequence", "Effectif")
+p4 <- ggplot(freq_usage, aes(x = Frequence, y = Effectif, fill = Frequence)) +
+  geom_bar(stat = "identity") + theme_minimal() +
+  labs(title = "Fréquence d'utilisation", x = "", y = "Effectif") +
+  scale_fill_viridis_d(option = "plasma") +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1), legend.position = "none")
 
-ggplot(freq_usage, aes(x = Frequence, y = Effectif, fill = Frequence)) +
-  geom_bar(stat = "identity") +
-  theme_minimal() +
-  labs(title = "Fréquence d'utilisation des plateformes", x = "Fréquence", y = "Effectif") +
-  scale_fill_viridis_d(option = "plasma")
+gridExtra::grid.arrange(p3, p4, ncol = 2)
 ```
 
-**Interprétation :**
-La quasi-totalité des répondants utilise ces services "Très souvent" ou "Souvent". L'usage "Rarement" est anecdotique. Cela renforce la pertinence de l'étude : nous interrogeons des utilisateurs experts et quotidiens.
+**Interprétation :** On observe une forte proportion d'étudiants (Ingénieurs, Licence, Mastère) utilisant ces plateformes très souvent. L'échantillon reflète un profil technophile et critique.
 
-## Analyse des Plateformes utilisées
-Il est intéressant de voir quelles plateformes dominent le paysage de nos répondants.
+## Plateformes les plus utilisées
 
-```{r desc_plateformes}
-# Séparation des plateformes (si choix multiples)
-plats <- data$Q6 %>% 
-  strsplit(", ") %>% 
-  unlist() %>% 
-  table() %>% 
-  as.data.frame()
+```{r desc_plateformes, fig.width=6, fig.height=3}
+plats <- data$Q6 %>% strsplit(", ") %>% unlist() %>% table() %>% as.data.frame()
 colnames(plats) <- c("Plateforme", "Frequence")
 
 ggplot(plats, aes(x = reorder(Plateforme, Frequence), y = Frequence)) +
-  geom_segment(aes(x = reorder(Plateforme, Frequence), xend = Plateforme, y = 0, yend = Frequence), color = "skyblue") +
-  geom_point(color = "blue", size = 4, alpha = 0.6) +
-  theme_light() +
-  coord_flip() +
-  labs(title = "Plateformes les plus citées", x = "Plateforme", y = "Nombre de citations")
+  geom_segment(aes(xend = Plateforme, y = 0, yend = Frequence), color = "steelblue") +
+  geom_point(color = "navy", size = 3) + theme_light() + coord_flip() +
+  labs(title = "Plateformes les plus citées", x = "", y = "Nombre de citations")
 ```
 
-**Interprétation :**
-Instagram, TikTok, Netflix et Spotify arrivent en tête. Ce sont précisément les plateformes dont le modèle économique et l'expérience utilisateur reposent le plus sur la recommandation algorithmique "logarithmique".
+**Interprétation :** Instagram, TikTok, Netflix et Spotify dominent — des plateformes dont le modèle repose entièrement sur la recommandation algorithmique.
 
 \newpage
 
-\newpage
+# Analyse en Composantes Principales (ACP)
 
-# Analyse en Composantes Principales (ACP) avec FactoMineR
-L'Analyse en Composantes Principales (ACP) est une méthode de la statistique multivariée qui consiste à transformer des variables corrélées en nouvelles variables décorrélées les unes des autres. Ces nouvelles variables sont nommées « composantes principales », ou axes principaux.
-
-Dans cette section, nous utilisons le package `FactoMineR` pour traiter nos 24 variables de satisfaction (Q7 à Q30). Nous intégrons également les variables démographiques (Sexe, Age, Etude) comme variables qualitatives illustratives.
+L'ACP est une méthode de réduction de dimensionnalité qui transforme des variables corrélées en composantes principales décorrélées. Nous utilisons ici `FactoMineR` sur les 24 variables de satisfaction (Q7–Q30), avec les variables démographiques en illustratives.
 
 ```{r pca_exec_final}
-# Exécution de la PCA avec FactoMineR
-# On garde les variables Q7-Q30 comme actives
-# On ajoute le Sexe (3), l'Age (2) et l'Etude (4) comme variables illustratives
-res.pca <- PCA(data, 
-               quanti.sup = NULL, 
-               quali.sup = c(1, 2, 3, 4, 5, 6, 31:35), 
+res.pca <- PCA(data,
+               quanti.sup = NULL,
+               quali.sup = c(1, 2, 3, 4, 5, 6, 31:35),
                graph = FALSE)
 ```
 
 ## Choix du nombre d'axes
-Le choix du nombre d'axes est une étape critique. Nous utilisons trois critères complémentaires :
 
-```{r eigenvalues_table}
-# Tableau des valeurs propres
-kable(res.pca$eig, caption = "Valeurs propres et inertie")
+```{r scree_eig, fig.width=7, fig.height=3.5}
+p_scree <- fviz_eig(res.pca, addlabels = TRUE, ylim = c(0, 50)) +
+  theme_minimal() +
+  labs(title = "Éboulis des valeurs propres (Scree Plot)")
+
+print(p_scree)
 ```
 
-```{r scree_plot_final}
-fviz_eig(res.pca, addlabels = TRUE, ylim = c(0, 50)) + 
-  theme_minimal() + 
-  labs(title = "Éboulis des valeurs propres (Scree Plot)", subtitle = "Méthode du coude et critère de Kaiser")
+```{r eigenvalues_table}
+kable(round(res.pca$eig[1:6, ], 3), caption = "Valeurs propres et taux d'inertie (6 premiers axes)")
 ```
 
 **Interprétation :**
-1. **Critère de Kaiser** : Les 4 premières dimensions ont une valeur propre supérieure à 1. Elles capturent chacune plus d'information qu'une variable d'origine seule.
-2. **Critère du coude** : On observe une rupture de pente après le 2ème ou 3ème axe.
-3. **Taux d'inertie cumulé** : Avec 2 axes, nous expliquons 48% de la variance. Avec 4 axes, nous atteignons 64%.
-**Décision** : Nous retenons les **2 premiers axes** pour la représentation graphique plane, tout en gardant à l'esprit que les axes 3 et 4 portent une information complémentaire non négligeable.
 
-\newpage
+- **Critère de Kaiser** : Les axes dont la valeur propre > 1 sont retenus (axes 1 à 4).
+- **Taux d'inertie cumulé** : Les 2 premiers axes expliquent ~48% de la variance ; les 4 premiers ~64%.
+- **Critère du coude** : La rupture de pente est visible après l'axe 2.
 
-## Analyse de la structure des variables
-Le cercle des corrélations permet d'interpréter les axes factoriels.
+**Décision :** Nous retenons les **2 premiers axes** pour les représentations graphiques.
 
-```{r var_circle_contrib}
+## Cercle des corrélations des variables
+
+```{r var_circle_contrib, fig.width=7, fig.height=5}
 fviz_pca_var(res.pca, col.var = "contrib",
              gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
              repel = TRUE) +
   theme_minimal() +
-  labs(title = "Cercle des corrélations", subtitle = "Coloré par la contribution aux axes")
+  labs(title = "Cercle des corrélations", subtitle = "Coloré par contribution aux axes")
 ```
 
-**Interprétation de l'Axe 1 (Horizontal) :**
-L'axe 1 est fortement corrélé aux variables de satisfaction globale et de sentiment de compréhension. Les individus situés à droite sont ceux qui ont des scores élevés partout (utilisateurs satisfaits), tandis que ceux à gauche sont les sceptiques ou insatisfaits. On peut nommer cet axe **"Axe de l'Adhésion Algorithmique"**.
+**Interprétation :** L'axe 1 (**Adhésion Algorithmique**) est lié aux variables de satisfaction globale. L'axe 2 (**Exploration vs Exploitation**) oppose les variables liées à la découverte de nouveaux contenus à celles liées à la précision des recommandations.
 
-**Interprétation de l'Axe 2 (Vertical) :**
-L'axe 2 semble opposer les variables liées à la découverte de nouveaux contenus (curiosité) aux variables liées à la précision de la recommandation (confort). Un score élevé sur cet axe indique une recherche de nouveauté. On peut le nommer **"Axe de l'Exploration vs Exploitation"**.
+## Carte des individus
 
-\newpage
-
-## Analyse des individus et des groupes
-La carte des individus permet d'identifier les profils types et les individus atypiques (outliers).
-
-```{r ind_map_full}
-fviz_pca_ind(res.pca, 
-             geom = c("point", "text"), 
-             repel = TRUE,
-             col.ind = "cos2", 
-             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07")) +
-  theme_minimal() +
-  labs(title = "Carte des individus", subtitle = "Colorée par la qualité de représentation (Cos2)")
-```
-
-**Interprétation :**
-Les individus en rouge sont très bien représentés sur ce plan factoriel. On remarque que les individus sont répartis de manière assez homogène, ce qui suggère une diversité de perceptions dans notre échantillon.
-
-### Analyse par variables illustratives
-Nous croisons ici les résultats de l'ACP avec les caractéristiques démographiques.
-
-```{r habillage_sexe_final}
-fviz_pca_ind(res.pca, 
-             habillage = 3, # Sexe
-             addEllipses = TRUE, 
+```{r ind_maps, fig.width=7, fig.height=4}
+fviz_pca_ind(res.pca,
+             habillage = 3,
+             addEllipses = TRUE,
              ellipse.type = "confidence",
-             palette = "jco") + 
+             geom = "point",
+             palette = "jco") +
   theme_minimal() +
   labs(title = "Individus groupés par Sexe", subtitle = "Ellipses de confiance à 95%")
 ```
 
-**Conclusion de l'ACP :**
-L'ACP a permis de synthétiser 24 questions en deux dimensions majeures. Nous avons identifié que le genre n'est pas un facteur de discrimination massif (chevauchement des ellipses), bien que de légères tendances apparaissent.
+**Conclusion ACP :** Le genre ne constitue pas un facteur de discrimination massif (chevauchement des ellipses). La diversité de perceptions dans l'échantillon suggère que d'autres variables (fréquence, plateforme) jouent un rôle plus structurant.
 
 \newpage
 
 # Analyse en Correspondances Multiples (ACM)
-L'ACM approfondit l'analyse en se concentrant sur les variables nominales et les comportements binaires.
 
-```{r mca_details}
-# Exécution de l'ACM
+L'ACM est l'équivalent de l'ACP pour les variables qualitatives. Elle permet d'étudier les liens entre les modalités des variables nominales et comportements binaires (Q31–Q35).
+
+```{r mca_exec}
 res.mca <- MCA(data[, c(2:5, 31:35)], graph = FALSE)
 ```
 
 ## Nuage des modalités et des variables
-```{r mca_var_contrib}
-fviz_mca_var(res.mca, choice = "mca.cor", repel = TRUE) +
-  theme_minimal() +
-  labs(title = "Corrélation des variables avec les axes de l'ACM")
-```
 
-```{r mca_mod_contrib}
-fviz_mca_var(res.mca, col.var = "contrib", 
-             gradient.cols = c("blue", "yellow", "red"),
+```{r mca_plots, fig.width=7, fig.height=4.5}
+fviz_mca_var(res.mca, col.var = "contrib",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
              repel = TRUE) +
   theme_minimal() +
-  labs(title = "Nuage des modalités", subtitle = "Analyse des proximités entre catégories")
+  labs(title = "ACM – Nuage des modalités", subtitle = "Coloré par contribution aux axes")
 ```
 
-**Interprétation de l'ACM :**
-L'ACM révèle des associations fortes entre certaines modalités. Par exemple, les utilisateurs "Très fréquents" sont souvent associés à une réponse "Oui" à la question sur la confiance algorithmique. L'axe 1 de l'ACM sépare les profils "engagés" des profils "distants".
+**Interprétation :** L'axe 1 de l'ACM sépare les profils *engagés* (utilisateurs fréquents, répondant "Oui" aux comportements algorithmiques) des profils *distants*. L'axe 2 distingue selon le niveau d'étude et la tranche d'âge.
 
 \newpage
 
 # Classification Hiérarchique sur Composantes Principales (HCPC)
-L'HCPC combine les avantages des méthodes factorielles (réduction du bruit) et des méthodes de classification (groupement).
+
+L'HCPC combine les méthodes factorielles (réduction du bruit) et la classification ascendante hiérarchique pour produire des groupes stables.
 
 ```{r hcpc_exec}
-# Calcul de la classification sur les résultats de l'ACP
 res.hcpc <- HCPC(res.pca, nb.clust = -1, graph = FALSE)
 ```
 
-## Construction du Dendrogramme
-Le dendrogramme visualise la hiérarchie des regroupements et permet de justifier le nombre de clusters choisi.
-```{r hcpc_dendro}
-fviz_dend(res.hcpc, 
-          rect = TRUE, 
-          palette = "jco",
-          rect_fill = TRUE) +
-  labs(title = "HCPC - Dendrogramme des individus")
+## Dendrogramme et Carte des clusters
+
+```{r hcpc_plots, fig.width=7, fig.height=4}
+fviz_dend(res.hcpc, rect = TRUE, palette = "jco", rect_fill = TRUE, cex = 0.5) +
+  labs(title = "Dendrogramme HCPC")
 ```
 
-## Carte des clusters (Plan Factoriel)
-Représentation des groupes d'individus sur le premier plan de l'ACP (Dim 1 & 2).
-```{r hcpc_clusters}
-fviz_cluster(res.hcpc, 
-             repel = TRUE, 
-             palette = "jco", 
-             geom = "point",
-             main = "HCPC - Carte des clusters d'individus") +
+```{r hcpc_map, fig.width=7, fig.height=4}
+fviz_cluster(res.hcpc, repel = TRUE, palette = "jco", geom = "point",
+             main = "HCPC – Carte des clusters") +
   theme_minimal()
 ```
 
-# Analyse comportementale — Variables binaires et Profils
-Cette section utilise la description des clusters pour extraire des conclusions sur les questions "Oui/Non" (Q31 à Q35).
+## Synthèse des Profils Identifiés
 
-## Caractérisation des clusters par les variables
-Nous utilisons le test du Khi-2 pour identifier les variables qui discriminent le mieux les groupes.
-```{r cluster_desc}
-# Variables les plus significatives pour chaque groupe
-res.hcpc$desc.var$test.chi2
+```{r cluster_chi2}
+kable(round(res.hcpc$desc.var$test.chi2, 3),
+      caption = "Variables discriminantes par cluster (Khi-2)")
 ```
 
-## Profils types des répondants
-Description des modalités qui sur-représentent chaque cluster (v.test > 1.96).
-```{r cluster_cat}
-# Modalités caractéristiques (Comportements types)
-res.hcpc$desc.var$category
-```
+Sur la base de l'HCPC, nous identifions **3 segments majeurs** :
 
-### Synthèse des Profils Identifiés
-Sur la base des résultats de l'HCPC, nous identifions trois segments majeurs :
-
-1. **Le Cluster 1 : Les "Algorithmes-Sceptiques"**
-   - Caractéristiques : Individus ayant des scores de satisfaction faibles. Ils utilisent souvent les plateformes par habitude mais ne se sentent pas "compris".
-   - Profil : Souvent des profils ayant un niveau d'étude élevé, portant un regard critique.
-
-2. **Le Cluster 2 : Les "Algorithmes-Enthousiastes"**
-   - Caractéristiques : Utilisateurs très satisfaits, se sentant compris par les recommandations.
-   - Comportement : Usage très fréquent, grande confiance dans les suggestions de Netflix/Spotify.
-
-3. **Le Cluster 3 : Les "Explorateurs Curieux"**
-   - Caractéristiques : Individus qui valorisent la découverte de nouveaux contenus.
-   - Profil : Recherchent activement la diversité et apprécient quand l'algorithme "les surprend".
+| Cluster | Nom | Caractéristiques |
+|---------|-----|-----------------|
+| 1 | **Sceptiques** | Scores faibles, usage habituel, peu de confiance algorithmique |
+| 2 | **Enthousiastes** | Scores élevés, usage très fréquent, grande confiance (Netflix/Spotify) |
+| 3 | **Explorateurs** | Valorisent la découverte, apprécient les surprises algorithmiques |
 
 \newpage
 
 # Partitionnement par K-means
-En complément de la classification hiérarchique (HCPC), nous réalisons ici un partitionnement par la méthode des K-means. Cette méthode permet de valider la stabilité de nos groupes.
 
-## Détermination du nombre optimal de clusters
-Nous utilisons la méthode de la Silhouette pour confirmer le choix de $k=3$.
+En complément de l'HCPC, la méthode K-means (partitionnement itératif) permet de **valider la stabilité** de nos groupes.
 
-```{r kmeans_opt}
-# Utilisation de la méthode de la silhouette pour k-means
+## Nombre optimal de clusters (Méthode de la Silhouette)
+
+```{r kmeans_opt, fig.width=6, fig.height=3.5}
 fviz_nbclust(res.pca$ind$coord, kmeans, method = "silhouette") +
   theme_minimal() +
-  labs(title = "Nombre optimal de clusters (Méthode de la Silhouette)")
+  labs(title = "Nombre optimal de clusters – Silhouette")
 ```
 
-## Exécution de K-means
-Nous fixons $k=3$ pour rester cohérent avec l'HCPC et faciliter la comparaison.
+## Visualisation K-means (k = 3)
 
-```{r kmeans_exec}
-set.seed(123) # Pour la reproductibilité
+```{r kmeans_exec, fig.width=7, fig.height=4}
+set.seed(123)
 res.km <- eclust(res.pca$ind$coord, "kmeans", k = 3, graph = FALSE)
 
-# Visualisation des clusters K-means
-fviz_cluster(res.km, 
-             palette = "Set2", 
-             geom = "point", 
+fviz_cluster(res.km, palette = "Set2", geom = "point",
              ellipse.type = "convex",
              main = "Partitionnement K-means (k=3)") +
   theme_minimal()
 ```
 
-**Interprétation :**
-Le partitionnement K-means produit des groupes très similaires à ceux de l'HCPC. Cela démontre la robustesse de notre segmentation. Les frontières entre les groupes sont nettes, confirmant que les individus au sein d'un même cluster partagent des perceptions très proches face aux algorithmes de recommandation.
+**Interprétation :** Le K-means produit des groupes **très similaires** à ceux de l'HCPC, démontrant la robustesse de la segmentation. Les frontières nettes entre clusters confirment que les individus d'un même groupe partagent des perceptions cohérentes face aux algorithmes.
 
 \newpage
 
 # Conclusion Générale et Recommandations
 
 ## Synthèse des résultats
-L'étude approfondie de la satisfaction face aux recommandations algorithmiques révèle une structure bidimensionnelle claire. L'adhésion aux algorithmes dépend fortement de la fréquence d'usage et de la perception de la personnalisation.
+
+L'analyse multidimensionnelle révèle une structure bidimensionnelle claire dans les données. L'adhésion aux algorithmes de recommandation dépend principalement de deux facteurs : la **fréquence d'usage** et la **perception de la personnalisation**.
+
+Les méthodes HCPC et K-means convergent vers **3 profils stables** : les Sceptiques, les Enthousiastes et les Explorateurs Curieux.
 
 ## Recommandations Stratégiques
-Sur la base de ces analyses, nous formulons les recommandations suivantes pour les concepteurs de systèmes de recommandation :
 
-1. **Améliorer la Transparence** : Pour les profils du Cluster 1 (Sceptiques), expliquer *pourquoi* une recommandation est faite pourrait renforcer la confiance.
-2. **Favoriser la Serendipité** : Pour le Cluster 3 (Explorateurs), intégrer plus de contenu "hors profil" pour satisfaire leur besoin de nouveauté.
-3. **Personnalisation Dynamique** : Ajuster l'équilibre entre "confort" et "nouveauté" en fonction du profil utilisateur identifié par des méthodes de clustering comme l'HCPC.
+1. **Améliorer la Transparence** (Cluster 1 – Sceptiques) : Expliquer *pourquoi* une recommandation est faite renforcerait la confiance des utilisateurs critiques.
+2. **Favoriser la Sérendipité** (Cluster 3 – Explorateurs) : Intégrer du contenu « hors profil » pour satisfaire le besoin de nouveauté.
+3. **Personnalisation Dynamique** : Ajuster l'équilibre *confort/nouveauté* selon le profil identifié par clustering.
 
 ## Limites et Perspectives
-Cette étude porte sur un échantillon de 41 individus, principalement jeunes et étudiants. Une extension à une population plus large et plus diversifiée permettrait de généraliser ces résultats. L'intégration de variables sur le temps passé par session ou le taux de clic réel (CTR) permettrait de confronter les perceptions aux comportements réels.
 
-\newpage
+Cette étude porte sur **`r nrow(data)` individus**, principalement jeunes et étudiants. Une extension à une population plus diverse permettrait de généraliser ces résultats. L'intégration de métriques comportementales réelles (temps de session, taux de clic) permettrait de confronter perceptions et comportements effectifs.
