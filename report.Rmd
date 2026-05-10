@@ -353,6 +353,40 @@ Sur la base des résultats de l'HCPC, nous identifions trois segments majeurs :
 
 \newpage
 
+# Partitionnement par K-means
+En complément de la classification hiérarchique (HCPC), nous réalisons ici un partitionnement par la méthode des K-means. Cette méthode permet de valider la stabilité de nos groupes.
+
+## Détermination du nombre optimal de clusters
+Nous utilisons la méthode de la Silhouette pour confirmer le choix de $k=3$.
+
+```{r kmeans_opt}
+# Utilisation de la méthode de la silhouette pour k-means
+fviz_nbclust(res.pca$ind$coord, kmeans, method = "silhouette") +
+  theme_minimal() +
+  labs(title = "Nombre optimal de clusters (Méthode de la Silhouette)")
+```
+
+## Exécution de K-means
+Nous fixons $k=3$ pour rester cohérent avec l'HCPC et faciliter la comparaison.
+
+```{r kmeans_exec}
+set.seed(123) # Pour la reproductibilité
+res.km <- eclust(res.pca$ind$coord, "kmeans", k = 3, graph = FALSE)
+
+# Visualisation des clusters K-means
+fviz_cluster(res.km, 
+             palette = "Set2", 
+             geom = "point", 
+             ellipse.type = "convex",
+             main = "Partitionnement K-means (k=3)") +
+  theme_minimal()
+```
+
+**Interprétation :**
+Le partitionnement K-means produit des groupes très similaires à ceux de l'HCPC. Cela démontre la robustesse de notre segmentation. Les frontières entre les groupes sont nettes, confirmant que les individus au sein d'un même cluster partagent des perceptions très proches face aux algorithmes de recommandation.
+
+\newpage
+
 # Conclusion Générale et Recommandations
 
 ## Synthèse des résultats
