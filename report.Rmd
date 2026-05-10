@@ -170,82 +170,12 @@ Instagram, TikTok, Netflix et Spotify arrivent en tête. Ce sont précisément l
 
 \newpage
 
-# ACP normée pas à pas
-Conformément à la théorie statistique, avant d'utiliser les fonctions automatisées, nous détaillons ici les étapes de calcul matriciel. Cela permet de valider la compréhension des mécanismes de l'ACP (Centrage, Réduction, Calcul des Valeurs Propres).
-
-## Préparation de la matrice active
-On extrait les variables Q7 à Q30 qui sont les scores sur l'échelle de Likert. Les valeurs manquantes sont imputées par la moyenne de la variable.
-
-```{r manual_X}
-X <- as.matrix(data[, 7:30])
-
-# Imputation des valeurs manquantes par la moyenne (comme le fait FactoMineR)
-for(i in 1:ncol(X)){
-  if(any(is.na(X[,i]))){
-    X[is.na(X[,i]), i] <- mean(X[,i], na.rm = TRUE)
-  }
-}
-```
-
-## Calcul de la matrice centrée réduite
-### Centrage
-```{r manual_centering}
-g <- colMeans(X, na.rm = TRUE)
-Y <- sweep(X, 2, g, FUN = '-')
-round(head(Y[, 1:5]), 3)
-```
-
-### Réduction
-```{r manual_reduction}
-n <- nrow(X)
-et <- apply(Y, 2, function(x) sqrt(sum(x^2, na.rm = TRUE) / n))
-Z <- sweep(Y, 2, et, FUN = '/')
-
-# Vérification : moyennes = 0, variances = 1
-round(colMeans(Z, na.rm = TRUE), 3)[1:5]
-round(colSums(Z^2, na.rm = TRUE)/n, 3)[1:5]
-```
-
-## Calcul de la matrice des corrélations
-```{r manual_R}
-R <- (1/n) * t(Z) %*% Z
-# R est identique à cor(X) si pas de données manquantes
-round(R[1:6, 1:6], 3)
-```
-
-## Calcul des valeurs propres et vecteurs propres
-```{r manual_eigen}
-vp <- eigen(R)
-lambda <- vp$values
-U <- vp$vectors
-
-# Affichage des valeurs propres
-lambda
-
-# Affichage des vecteurs propres (U)
-round(U[1:6, 1:6], 3)
-
-# Vérification de l'orthonormalité : t(U) %*% U = I
-round(t(U[,1:5]) %*% U[,1:5], 3)
-```
-
-## Calcul des composantes principales (Psi)
-Les composantes principales sont les projections des individus sur les axes.
-```{r manual_psi}
-Psi <- Z %*% U
-colnames(Psi) <- paste0("Dim.", 1:ncol(Psi))
-round(head(Psi[, 1:5]), 3)
-```
-
-## Les coordonnées des variables sur les axes (Eta)
-```{r manual_eta}
-Eta <- sweep(U, 2, sqrt(lambda), FUN = '*')
-colnames(Eta) <- paste0("Dim.", 1:ncol(Eta))
-round(head(Eta[, 1:5]), 3)
-```
+\newpage
 
 # Analyse en Composantes Principales (ACP) avec FactoMineR
-L'utilisation de packages spécialisés permet d'approfondir l'analyse en intégrant des variables supplémentaires et en calculant des indicateurs de qualité (Cos2) et de contribution.
+L'Analyse en Composantes Principales (ACP) est une méthode de la statistique multivariée qui consiste à transformer des variables corrélées en nouvelles variables décorrélées les unes des autres. Ces nouvelles variables sont nommées « composantes principales », ou axes principaux.
+
+Dans cette section, nous utilisons le package `FactoMineR` pour traiter nos 24 variables de satisfaction (Q7 à Q30). Nous intégrons également les variables démographiques (Sexe, Age, Etude) comme variables qualitatives illustratives.
 
 ```{r pca_exec_final}
 # Exécution de la PCA avec FactoMineR
