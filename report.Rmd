@@ -144,6 +144,20 @@ res.pca <- PCA(data,
                graph = FALSE)
 ```
 
+## Matrice de corrélation
+Avant de retenir l'ACP, il convient de vérifier que des corrélations existent entre nos variables — condition nécessaire pour justifier la réduction de dimensionnalité.
+
+```{r corrplot_matrix, fig.width=7, fig.height=5.5}
+X <- data[, 7:30]
+for(i in 1:ncol(X)) X[is.na(X[,i]), i] <- mean(X[,i], na.rm = TRUE)
+M <- cor(as.matrix(X))
+col_palette <- colorRampPalette(c("#E6F0F3", "#BDD7E7", "#8CBEDB", "#539ACF", "#0D6BA4"))(100)
+corrplot(M, type = "upper", order = "hclust", col = col_palette,
+         tl.col = "black", tl.cex = 0.6, method = "color")
+```
+
+**Interprétation :** La matrice révèle plusieurs groupes de variables fortement corrélées (blocs bleus intenses). Cette structure confirme la pertinence de l'ACP : il existe des dimensions latentes à extraire.
+
 ## Choix du nombre d'axes
 
 ```{r scree_eig, fig.width=7, fig.height=3.5}
@@ -192,6 +206,20 @@ fviz_pca_ind(res.pca,
 ```
 
 **Conclusion ACP :** Le genre ne constitue pas un facteur de discrimination massif (chevauchement des ellipses). La diversité de perceptions dans l'échantillon suggère que d'autres variables (fréquence, plateforme) jouent un rôle plus structurant.
+
+## Carte des individus (qualité de représentation)
+
+```{r ind_cos2, fig.width=7, fig.height=4}
+fviz_pca_ind(res.pca,
+             geom = c("point", "text"),
+             col.ind = "cos2",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE, labelsize = 2.5) +
+  theme_minimal() +
+  labs(title = "Carte des individus", subtitle = "Colorée par qualité de représentation (Cos2)")
+```
+
+**Interprétation :** Les individus en rouge sont ceux dont les coordonnées sur le plan factoriel sont les plus fiables. Ceux en bleu pâle sont moins bien représentés et doivent être interprétés avec prudence.
 
 \newpage
 
@@ -252,6 +280,15 @@ Sur la base de l'HCPC, nous identifions **3 segments majeurs** :
 | 1 | **Sceptiques** | Scores faibles, usage habituel, peu de confiance algorithmique |
 | 2 | **Enthousiastes** | Scores élevés, usage très fréquent, grande confiance (Netflix/Spotify) |
 | 3 | **Explorateurs** | Valorisent la découverte, apprécient les surprises algorithmiques |
+
+## Pouvoir discriminant des variables
+Le rapport Eta2 mesure la force de l'association entre chaque variable et les clusters :
+
+```{r cluster_eta2}
+eta2_df <- as.data.frame(res.hcpc$desc.var$test.chi2)
+kable(round(eta2_df, 3), caption = "Pouvoir discriminant des variables (Khi-2 et p-value)")
+```
+
 
 \newpage
 
